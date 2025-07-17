@@ -169,6 +169,18 @@ void add_text(Pane *pane, int x, int y, char *text) {
 void update_pane(Pane *pane) {
     _assert_initialized();
     assert(pane != NULL);
+
+    // Make sure the title and border is always there if added.
+
+    if (pane->flags & THIN_BORDER)
+        box(pane->win, 0, 0);
+
+    if (!(pane->flags & NO_TITLE)) {
+        wattron(pane->win, A_STANDOUT);
+        mvwaddstr(pane->win, 0, _CENTER_TEXT(pane->width, pane->title), pane->title);
+        wattroff(pane->win, A_STANDOUT);
+    }
+
     wrefresh(pane->win);
 }
 
