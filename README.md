@@ -6,9 +6,11 @@ Panes is a (WIP) single-header TUI windowing library for C.
 
 A simple hello world:
 
+> From [examples/helloworld.c](./examples/helloworld.c)
+
 ```c
 // Compile this example with the following command:
-// gcc -o example example.c -lncurses
+// gcc helloworld.c -lncurses
 
 // Just a single header file.
 #include "panes.h"
