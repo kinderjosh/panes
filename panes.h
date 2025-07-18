@@ -101,6 +101,12 @@ Pane *create_pane(int width, int height, int start_x, int start_y, char *title, 
 
     curs_set(flags & SHOW_CURSOR);
 
+    if (start_x == CENTER)
+        start_x = floor((_maxx / 2) - (width / 2));
+
+    if (start_y == CENTER)
+        start_y = floor((_maxy/ 2) - (height / 2));
+
     WINDOW *win = newwin(height, width, start_y, start_x);
 
     if (win == NULL) {
