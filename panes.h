@@ -15,18 +15,6 @@
 
 // ---------- Internal utilities ----------
 
-static bool _initialized = false;
-
-/*
-static void _assert_initialized() {
-    if (!_initialized) {
-        endwin();
-        fprintf(stderr, "panes: panes_init() was never called\n");
-        exit(1);
-    }
-}
-*/
-
 // stdscr dimensions initialized in panes_init().
 static int _maxy = 0;
 static int _maxx = 0;
@@ -45,6 +33,9 @@ int _panes_maxx() {
 #define _CENTER_X(width) (floor(width / 2 - _CENTER_OFFSET))
 #define _CENTER_Y(height) (floor(height / 2 - _CENTER_OFFSET))
 
+#define _TITLE_ATTR A_STANDOUT
+#define _ENTRY_ATTR A_UNDERLINE
+
 // ---------- Macros ----------
 
 #define MAX_WIDTH _panes_maxx()
@@ -55,13 +46,12 @@ int _panes_maxx() {
 // ---------- Widgets ----------
 
 typedef enum {
-    WIDGET_LABEL
+    WIDGET_LABEL,
+    WIDGET_ENTRY
 } WidgetType;
 
 typedef struct {
     WidgetType type;
-    int width;
-    int height;
     int x;
     int y;
 
@@ -69,10 +59,19 @@ typedef struct {
         struct {
             char *text;
         } label;
+
+        struct {
+            int width;
+            int height;
+            char *placeholder_text;
+            char *buffer;
+            size_t capacity;
+        } entry;
     };
 } Widget;
 
 typedef Widget Label;
+typedef Widget Entry;
 
 // ---------- Panes ----------
 
@@ -87,6 +86,7 @@ typedef struct {
     Widget **widgets;
     size_t widget_count;
     size_t widget_capacity;
+    size_t cur_widget;
 } Pane;
 
 // Pane flags
@@ -94,14 +94,13 @@ typedef struct {
 #define SHOW_CURSOR (0x02)
 #define NO_BORDER (0x04)
 #define NO_TITLE (0x08)
-#define SHOW_KEYPRESSES (0x16)
+#define SHOW_KEYPRESSES (0x10)
 
 #define BORDER_THICKNESS 1
 #define STARTING_WIDGET_CAPACITY 8
 
 // Initializes the library.
 void panes_init() {
-    _initialized = true;
     initscr();
 
     if (has_colors()) {
@@ -115,7 +114,6 @@ void panes_init() {
 // Ends the library.
 void panes_end() {
     endwin();
-    _initialized = false;
 }
 
 // Creates a new label widget.
@@ -124,13 +122,34 @@ Label *create_label(int x, int y, char *text) {
 
     Label *label = malloc(sizeof(Label));
     label->type = WIDGET_LABEL;
-    label->width = 0;
-    label->height = 0;
     label->x = x;
     label->y = y;
     label->label.text = malloc(strlen(text) + 1);
     strcpy(label->label.text, text);
     return label;
+}
+
+// Creates a new entry widget.
+Entry *create_entry(int width, int height, int x, int y, char *placeholder_text, char *buffer, size_t capacity) {
+    assert(buffer != NULL);
+
+    Entry *entry = malloc(sizeof(Entry));
+    entry->type = WIDGET_ENTRY;
+    entry->x = x;
+    entry->y = y;
+    entry->entry.width = width;
+    entry->entry.height = height;
+
+    if (placeholder_text == NULL)
+        entry->entry.placeholder_text = calloc(1, sizeof(char));
+    else {
+        entry->entry.placeholder_text = malloc(strlen(placeholder_text) + 1);
+        strcpy(entry->entry.placeholder_text, placeholder_text);
+    }
+
+    entry->entry.buffer = buffer;
+    entry->entry.capacity = capacity;
+    return entry;
 }
 
 // Deletes a widget.
@@ -140,6 +159,9 @@ void delete_widget(Widget *widget) {
     switch (widget->type) {
         case WIDGET_LABEL:
             free(widget->label.text);
+            break;
+        case WIDGET_ENTRY:
+            free(widget->entry.placeholder_text);
             break;
         default: assert(false);
     }
@@ -205,9 +227,9 @@ Pane *create_pane(int width, int height, int start_x, int start_y, char *title, 
         p->title = malloc(strlen(title) + 1);
         strcpy(p->title, title);
 
-        wattron(win, A_STANDOUT);
+        wattron(win, _TITLE_ATTR);
         mvwaddstr(win, 0, _CENTER_TEXT(width, title), title);
-        wattroff(win, A_STANDOUT);
+        wattroff(win, _TITLE_ATTR);
     }
 
     p->win = win;
@@ -231,33 +253,85 @@ void delete_pane(Pane *pane) {
     free(pane);
 }
 
-// Places a label onto a pane.
-static void _place_label(Pane *pane, Label *label) {
-    int x = label->x;
-    int y = label->y;
+// Calculates where on the actual terminal screen to place widgets inside the panes, border included.
+// Also calculates the position to place CENTER.
+static void _widget_pos_to_screen_pos(Pane *pane, Widget *widget, int *x, int *y) {
+    assert(widget != NULL);
+    assert(x != NULL);
+    assert(y != NULL);
+    
+    *x = widget->x;
+    *y = widget->y;
 
     bool x_centered = false;
     bool y_centered = false;
 
-    if (label->x == CENTER) {
-        x = _CENTER_TEXT(pane->width, label->label.text);
+    if (widget->x == CENTER) {
+        switch (widget->type) {
+            case WIDGET_LABEL:
+                *x = _CENTER_TEXT(pane->width, widget->label.text);
+                break;
+            case WIDGET_ENTRY:
+                *x = _CENTER_POS(pane->width, widget->entry.width);
+                break;
+            default: assert(false);
+        }
+
         x_centered = true;
     }
 
-    if (label->y == CENTER) {
-        y = _CENTER_Y(pane->height);
+    if (widget->y == CENTER) {
+        switch (widget->type) {
+            case WIDGET_LABEL:
+                *y = _CENTER_Y(pane->height);
+                break;
+            case WIDGET_ENTRY:
+                *y = _CENTER_POS(pane->height, widget->entry.height);
+                break;
+        }
+
         y_centered = true;
     }
 
     if (!(pane->flags & NO_BORDER)) {
         if (!x_centered)
-            x += BORDER_THICKNESS;
+            *x += BORDER_THICKNESS;
 
         if (!y_centered)
-            y += BORDER_THICKNESS;
+            *y += BORDER_THICKNESS;
     }
 
-    mvwaddstr(pane->win, pane->start_y + y, pane->start_x + x, label->label.text);
+    *x += pane->start_x;
+    *y += pane->start_y;
+}
+
+// Places a label onto a pane.
+static void _place_label(Pane *pane, Label *label) {
+    assert(pane != NULL);
+    assert(label != NULL);
+
+    int x;
+    int y;
+    _widget_pos_to_screen_pos(pane, label, &x, &y);
+    mvwaddstr(pane->win, y, x, label->label.text);
+}
+
+// Places an entry onto a pane.
+static void _place_entry(Pane *pane, Entry *entry) {
+    assert(pane != NULL);
+    assert(entry != NULL);
+
+    int x;
+    int y;
+    _widget_pos_to_screen_pos(pane, entry, &x, &y);
+
+    wattron(pane->win, _ENTRY_ATTR);
+    const size_t len = strlen(entry->entry.placeholder_text);
+
+    for (int i = 0; i < entry->entry.width; i++)
+        mvwaddch(pane->win, y, x + i, (size_t)i >= len ? ' ' : entry->entry.placeholder_text[i]);
+
+    wattroff(pane->win, _ENTRY_ATTR);
 }
 
 // Draws all packed widgets onto a pane.
@@ -269,9 +343,9 @@ void update_pane(Pane *pane) {
         box(pane->win, 0, 0);
 
     if (!(pane->flags & NO_TITLE)) {
-        wattron(pane->win, A_STANDOUT);
+        wattron(pane->win, _TITLE_ATTR);
         mvwaddstr(pane->win, 0, _CENTER_TEXT(pane->width, pane->title), pane->title);
-        wattroff(pane->win, A_STANDOUT);
+        wattroff(pane->win, _TITLE_ATTR);
     }
 
     // Show the widgets.
@@ -279,6 +353,9 @@ void update_pane(Pane *pane) {
         switch (pane->widgets[i]->type) {
             case WIDGET_LABEL:
                 _place_label(pane, pane->widgets[i]);
+                break;
+            case WIDGET_ENTRY:
+                _place_entry(pane, pane->widgets[i]);
                 break;
             default: assert(false);
         }
@@ -291,6 +368,19 @@ void update_pane(Pane *pane) {
 int await_keypress(Pane *pane) {
     assert(pane != NULL);
     return wgetch(pane->win);
+}
+
+// Moves the cursor to the position of a widget on a pane.
+void move_cursor_to_widget(Pane *pane, Widget *widget) {
+    assert(pane != NULL);
+    assert(widget != NULL);
+
+    int x;
+    int y;
+    _widget_pos_to_screen_pos(pane, widget, &x, &y);
+
+    wmove(pane->win, y, x);
+    wrefresh(pane->win);
 }
 
 #endif
