@@ -2,7 +2,7 @@
 // gcc helloworld.c -lncurses -lm
 
 // Only a single header file.
-#include "panes.h"
+#include "../panes.h"
 
 int main(void) {
     // Initialize panes.
