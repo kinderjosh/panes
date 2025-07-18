@@ -8,8 +8,9 @@ int main(void) {
     // Initialize panes.
     panes_init();
 
-    // Create a maximum width and height pane with the title "Hello" and with a thin border.
-    Pane *pane = create_pane(MAX_WIDTH, MAX_HEIGHT, 0, 0, "Example", BREAK_WITH_CTRL_C | THIN_BORDER);
+    // Create a maximum width and height pane with the title "Hello",
+    // allow the user to break out with CTRL + C if needed.
+    Pane *pane = create_pane(MAX_WIDTH, MAX_HEIGHT, 0, 0, "Example", BREAK_WITH_CTRL_C);
 
     // Add "Hello, World!" into the pane.
     add_text(pane, CENTER, CENTER, "Hello, World!");
