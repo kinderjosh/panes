@@ -1,29 +1,32 @@
 # Panes
 
-Panes is a (WIP) single-header TUI windowing library for C.
+Panes is a (WIP) single-header TUI framework for C.
 
 ## Example
 
 A simple hello world:
 
-> From [examples/helloworld.c](./examples/helloworld.c)
-
 ```c
 // Compile this example with the following command:
-// gcc helloworld.c -lncurses
+// gcc helloworld.c -lncurses -lm
 
-// Just a single header file.
-#include "../panes.h"
+// Only a single header file.
+#include "panes.h"
 
 int main(void) {
     // Initialize panes.
     panes_init();
 
-    // Create a maximum width and height pane with the title "Example" and with a thin border.
-    Pane *pane = create_pane(MAX_WIDTH, MAX_HEIGHT, 0, 0, "Example", BREAK_WITH_CTRL_C | THIN_BORDER);
+    // Create a new pane to fill the terminal and have the title "Pane",
+    // also allow the user to break with ^C.
+    Pane *pane = create_pane(MAX_WIDTH, MAX_HEIGHT, 0, 0, "Pane", BREAK_WITH_CTRL_C);
 
-    // Add "Hello, World!" into the center of the pane.
-    add_text(pane, CENTER, CENTER, "Hello, World!");
+    // Create a new label with the text "Hello, World!" in the center.
+    Label *text = create_label(CENTER, CENTER, "Hello, World!");
+    // Pack this into the pane to be drawn on the next update.
+    pack_widget(pane, text);
+
+    // Draw all packed widgets onto the pane.
     update_pane(pane);
 
     // Wait for a keypress then delete the pane.
@@ -48,9 +51,7 @@ Then, download the [header file](./panes.h) and include it into your project.
 #include "panes.h"
 ```
 
-Your programs should always start with ```panes_init()``` to initialize the library, and end with ```panes_end()``` likewise.
-
-Also, don't forget to link with ncurses by passing ```-lncurses``` to the end of your compilation command.
+Make sure to link your programs with the ncurses and math libraries by adding ```-lncurses -lm``` onto the end of your compilation commands.
 
 ## Documentation
 

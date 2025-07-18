@@ -1,19 +1,23 @@
 // Compile this example with the following command:
-// gcc helloworld.c -lncurses
+// gcc helloworld.c -lncurses -lm
 
-// Just a single header file.
-#include "../panes.h"
+// Only a single header file.
+#include "panes.h"
 
 int main(void) {
     // Initialize panes.
     panes_init();
 
-    // Create a maximum width and height pane with the title "Hello",
-    // allow the user to break out with CTRL + C if needed.
-    Pane *pane = create_pane(MAX_WIDTH, MAX_HEIGHT, 0, 0, "Example", BREAK_WITH_CTRL_C);
+    // Create a new pane to fill the terminal and have the title "Pane",
+    // also allow the user to break with ^C.
+    Pane *pane = create_pane(MAX_WIDTH, MAX_HEIGHT, 0, 0, "Pane", BREAK_WITH_CTRL_C);
 
-    // Add "Hello, World!" into the pane.
-    add_text(pane, CENTER, CENTER, "Hello, World!");
+    // Create a new label with the text "Hello, World!" in the center.
+    Label *text = create_label(CENTER, CENTER, "Hello, World!");
+    // Pack this into the pane to be drawn on the next update.
+    pack_widget(pane, text);
+
+    // Draw all packed widgets onto the pane.
     update_pane(pane);
 
     // Wait for a keypress then delete the pane.
