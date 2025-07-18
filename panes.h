@@ -196,13 +196,14 @@ void update_pane(Pane *pane) {
     wrefresh(pane->win);
 }
 
-// Waits a keypress on a pane.
+// Waits for a key to be pressed on a pane.
 int await_keypress(Pane *pane) {
     _assert_initialized();
     assert(pane != NULL);
     return wgetch(pane->win);
 }
 
+// Moves the cursor.
 void move_cursor(Pane *pane, int x, int y) {
     _assert_initialized();
     assert(pane != NULL);
